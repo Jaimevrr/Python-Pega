@@ -1,4 +1,4 @@
-#Para 16 tiendas (test)
+#Para 16 tiendas (funcionando)
 import pandas as pd
 import numpy as np
 import pulp
@@ -10,7 +10,7 @@ file_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Docu
 df = pd.read_excel(file_path, sheet_name="Hoja1")
 
 # Definir proporciones para cada tienda (ajustado a 16 tiendas)
-proporciones = np.array([0.10, 0.10, 0.10, 0.10, 0.15, 0.20, 0.25, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+proporciones = np.array([0.05, 0.10, 0.10, 0.10, 0.15, 0.20, 0.30, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 tiendas = [f"Tienda {i+1}" for i in range(16)]
 
 def repartir_productos(codigos, cantidades):
@@ -26,10 +26,16 @@ def repartir_productos(codigos, cantidades):
         # Añadir restricciones para que la suma de productos asignados sea igual a la cantidad total
         prob += pulp.lpSum(x) == cantidad, "SumaTotalProductos"
 
+        # Añadir restricciones para asegurar que las tiendas con proporción cero no reciban unidades
+        for i in range(len(tiendas)):
+            if proporciones[i] == 0:
+                prob += x[i] == 0
+
         # Añadir restricciones para asegurar que todas las tiendas reciban al menos una unidad si es posible
-        if cantidad >= len(tiendas):
+        if cantidad >= sum(proporciones > 0):
             for i in range(len(tiendas)):
-                prob += x[i] >= 1
+                if proporciones[i] > 0:
+                    prob += x[i] >= 1
 
         # Añadir restricciones y función objetivo para minimizar la desviación absoluta de las proporciones
         for i in range(len(tiendas)):
@@ -43,7 +49,7 @@ def repartir_productos(codigos, cantidades):
 
         # Obtener los resultados
         reparto = [int(x[i].varValue) for i in range(len(tiendas))]
-        tienda_menos_unidades = tiendas[reparto.index(min(reparto))]
+        tienda_menos_unidades = tiendas[reparto.index(min([r for r, p in zip(reparto, proporciones) if p > 0]))]
         resultados.append({
             "Codigo": codigo,
             "Cantidad Total": cantidad,
@@ -90,7 +96,8 @@ for resultado in resultados:
 df_resultados = pd.DataFrame(resultados_formato)
 
 # Guardar el archivo en una ruta con permisos de escritura
-output_file_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\distrimoonfinalesqs.xlsx'
+output_file_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\distrimoonfinal.xlsx'
 df_resultados.to_excel(output_file_path, index=False)
 
 print(f"Archivo guardado en {output_file_path}")
+  
