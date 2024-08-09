@@ -1,0 +1,36 @@
+import pandas as pd
+
+# Ruta al archivo con la meta mensual
+file_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\meta.xlsx'
+
+# Leer el archivo Excel
+df = pd.read_excel(file_path)
+
+# Proporciones diarias
+proporciones = [
+    0.02, 0.03, 0.05, 0.04, 0.02, 0.02, 0.03, 0.03, 0.03, 0.05, 0.04, 0.03, 0.03, 0.02, 0.04, 0.03, 0.04, 0.04,
+    0.02, 0.02, 0.02, 0.03, 0.03, 0.04, 0.04, 0.02, 0.02, 0.03, 0.03, 0.04, 0.05
+]
+
+# Normalizar las proporciones para que sumen exactamente 1
+proporciones = [p / sum(proporciones) for p in proporciones]
+
+# Crear una lista para almacenar los datos de salida
+data = []
+
+# Iterar sobre cada fila en el DataFrame original
+for _, row in df.iterrows():
+    meta_mensual = row['Meta Mensual']
+    for i, proporcion in enumerate(proporciones):
+        meta_diaria = meta_mensual * proporcion
+        fecha = int(pd.Timestamp(2024, 8, i + 1).strftime('%Y%m%d'))  # Fecha como número
+        data.append([row['Company'], fecha, row['Almacen'], row['Centro de Costos'], meta_diaria])
+
+# Crear un DataFrame con los resultados
+df_resultado = pd.DataFrame(data, columns=['Company', 'Fecha', 'Almacen', 'Centro de Costo', 'Meta diaria'])
+
+# Guardar el resultado en un nuevo archivo Excel
+output_file_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\meta_diariaesqs.xlsx'
+df_resultado.to_excel(output_file_path, index=False)
+
+print(f"Archivo guardado en {output_file_path}")
