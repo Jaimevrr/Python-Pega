@@ -1,3 +1,4 @@
+#Formato de metas, con posibilidad de dejar en cero los días de cierre de tienda y sumando la proporcion al resto del mes. (siguiente paso, subir las proporciones desde un excel o ver si es más comodo así
 import pandas as pd
 
 # Ruta al archivo con la meta mensual
@@ -6,14 +7,17 @@ file_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Docu
 # Leer el archivo Excel
 df = pd.read_excel(file_path)
 
-# Proporciones diarias
-proporciones = [
+# Proporciones diarias originales
+proporciones_originales = [
     0.02, 0.03, 0.05, 0.04, 0.02, 0.02, 0.03, 0.03, 0.03, 0.05, 0.04, 0.03, 0.03, 0.02, 0.04, 0.03, 0.04, 0.04,
     0.02, 0.02, 0.02, 0.03, 0.03, 0.04, 0.04, 0.02, 0.02, 0.03, 0.03, 0.04, 0.05
 ]
 
-# Normalizar las proporciones para que sumen exactamente 1
-proporciones = [p / sum(proporciones) for p in proporciones]
+# Definir las tiendas y los días en los que no abrirán en caso de necesitar
+tiendas_cerradas = {
+    'COSTANERA CENTER': [0, 0],  # COSTANERA CENTER no abrirá los días 14 y 21
+    # Agrega más tiendas y sus días correspondientes si es necesario
+}
 
 # Crear una lista para almacenar los datos de salida
 data = []
@@ -21,8 +25,34 @@ data = []
 # Iterar sobre cada fila en el DataFrame original
 for _, row in df.iterrows():
     meta_mensual = row['Meta Mensual']
-    for i, proporcion in enumerate(proporciones):
+    tienda = row['Tienda']
+    
+    # Copiar las proporciones originales para esta tienda
+    proporciones = proporciones_originales.copy()
+    
+    # Ajustar las proporciones si la tienda está en la lista de tiendas cerradas
+    if tienda in tiendas_cerradas:
+        dias_cerrados = tiendas_cerradas[tienda]
+        # Establecer las proporciones en esos días a cero
+        for dia in dias_cerrados:
+            proporciones[dia - 1] = 0
+        # Redistribuir las proporciones restantes para que sumen 1
+        proporciones_restantes = [p for p in proporciones if p > 0]
+        total_proporciones_restantes = sum(proporciones_restantes)
+        proporciones = [p / total_proporciones_restantes if p > 0 else 0 for p in proporciones]
+    
+    # Calcular las metas diarias para cada día del mes
+    metas_diarias = []
+    for proporcion in proporciones:
         meta_diaria = meta_mensual * proporcion
+        metas_diarias.append(meta_diaria)
+    
+    # Ajustar la última meta diaria para asegurar que la suma total coincida con la meta mensual
+    diferencia = meta_mensual - sum(metas_diarias)
+    metas_diarias[-1] += diferencia  # Ajustar la última meta diaria para corregir la diferencia
+    
+    # Crear las filas del DataFrame de resultados
+    for i, meta_diaria in enumerate(metas_diarias):
         fecha = int(pd.Timestamp(2024, 8, i + 1).strftime('%Y%m%d'))  # Fecha como número
         data.append([row['Company'], fecha, row['Almacen'], row['Centro de Costos'], meta_diaria])
 
@@ -30,7 +60,8 @@ for _, row in df.iterrows():
 df_resultado = pd.DataFrame(data, columns=['Company', 'Fecha', 'Almacen', 'Centro de Costo', 'Meta diaria'])
 
 # Guardar el resultado en un nuevo archivo Excel
-output_file_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\meta_diariaesqs.xlsx'
+output_file_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\meta_diariaborrame.xlsx'
 df_resultado.to_excel(output_file_path, index=False)
 
 print(f"Archivo guardado en {output_file_path}")
+
