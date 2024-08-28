@@ -1,0 +1,96 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_squared_error
+
+# Rutas de los archivos
+file_path_ventas = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\Origen\Ventasuni.xlsx'
+file_path_inventario = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\Origen\Inventariouni.xlsx'
+file_path_resultado = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\Resultado\rees.xlsx'
+
+# Cargar los datos desde los archivos Excel
+df_stock = pd.read_excel(file_path_inventario)
+df_ventas = pd.read_excel(file_path_ventas)
+
+# Unir los DataFrames para encontrar solo las combinaciones coincidentes
+df_combinado = pd.merge(df_stock, df_ventas, on=['Almacen', 'Marca'], how='inner')
+
+# Calcular el inventario promedio por categoría
+df_combinado['Inventario_Promedio'] = df_combinado.iloc[:, 2:9].mean(axis=1)
+
+# Calcular la demanda promedio mensual por categoría (ventas promedio)
+df_combinado['Demanda_Promedio_Mensual'] = df_combinado.iloc[:, 9:].mean(axis=1)
+
+# Calcular el ratio de rotación del inventario
+df_combinado['Ratio_Rotacion'] = df_combinado['Demanda_Promedio_Mensual'] / df_combinado['Inventario_Promedio']
+
+# Capacidad total de la tienda (ajusta este valor según tus necesidades)
+capacidad_total = 10000  # Este valor es un ejemplo, ajústalo según la capacidad real de tu tienda
+
+# Calcular la proporción de capacidad asignada a cada categoría considerando la demanda y el inventario promedio
+demanda_total = df_combinado['Demanda_Promedio_Mensual'].sum()
+
+# Calcular la capacidad mínima sugerida como un porcentaje del inventario promedio
+min_ratio = 0.75  # El porcentaje mínimo del inventario promedio que queremos sugerir como stock
+
+# Capacidad asignada (redondeada a enteros)
+df_combinado['Capacidad_Asignada'] = np.round(
+    (df_combinado['Demanda_Promedio_Mensual'] / demanda_total) * capacidad_total
+).clip(lower=np.round(df_combinado['Inventario_Promedio'] * min_ratio))
+
+# Calcular un stock sugerido máximo, por ejemplo, el 150% del inventario promedio
+max_factor = 1.5  # Factor para calcular el stock máximo sugerido
+df_combinado['Stock_Sugerido'] = np.round(df_combinado['Inventario_Promedio'] * max_factor)
+
+# Ajustar el cálculo de Stock Sugerido Basado en Rotación usando una media ponderada
+peso_inventario = 0.7
+peso_rotacion = 0.3
+
+df_combinado['Stock_Sugerido_Rotacion'] = np.round(
+    (peso_inventario * df_combinado['Inventario_Promedio']) + 
+    (peso_rotacion * df_combinado['Demanda_Promedio_Mensual'])
+)
+
+# Redondear las columnas de capacidad y stock sugerido
+df_combinado['Capacidad_Asignada'] = df_combinado['Capacidad_Asignada'].astype(int)
+df_combinado['Stock_Sugerido'] = df_combinado['Stock_Sugerido'].astype(int)
+df_combinado['Stock_Sugerido_Rotacion'] = df_combinado['Stock_Sugerido_Rotacion'].astype(int)
+
+# Preparar los datos para el modelo de Machine Learning
+X = df_combinado[['Inventario_Promedio', 'Demanda_Promedio_Mensual', 'Ratio_Rotacion']]
+y = df_combinado['Stock_Sugerido']  # Usamos Stock_Sugerido como la variable objetivo
+
+# Normalización de los datos
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Dividir los datos en conjunto de entrenamiento y prueba
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+
+# Entrenar un modelo de Random Forest con ajuste de hiperparámetros
+model = RandomForestRegressor(n_estimators=200, max_depth=10, min_samples_leaf=4, random_state=42)
+model.fit(X_train, y_train)
+
+# Validación cruzada para evaluar el modelo
+scores = cross_val_score(model, X_train, y_train, cv=5, scoring='neg_mean_squared_error')
+print(f"MSE promedio en validación cruzada: {-scores.mean()}")
+
+# Predecir en el conjunto de prueba
+y_pred = model.predict(X_test)
+
+# Evaluar el modelo en el conjunto de prueba
+mse = mean_squared_error(y_test, y_pred)
+print(f"Error cuadrático medio (MSE) en el conjunto de prueba: {mse}")
+
+# Predecir el Stock Sugerido con el modelo entrenado
+df_combinado['Stock_Sugerido_ML'] = np.round(model.predict(X_scaled)).astype(int)
+
+# Seleccionar columnas relevantes para el resultado final
+df_resultado = df_combinado[['Almacen', 'Marca', 'Inventario_Promedio', 'Demanda_Promedio_Mensual', 'Ratio_Rotacion', 'Capacidad_Asignada', 'Stock_Sugerido', 'Stock_Sugerido_Rotacion', 'Stock_Sugerido_ML']]
+
+# Guardar el resultado en un nuevo archivo Excel
+df_resultado.to_excel(file_path_resultado, index=False)
+
+print(f"El archivo de resultados se ha guardado en: {file_path_resultado}")
