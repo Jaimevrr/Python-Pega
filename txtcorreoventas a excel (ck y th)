@@ -1,0 +1,65 @@
+import pandas as pd
+import re
+
+# Ruta del archivo de texto y Excel de salida
+file_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\Origen\ventest2.txt'
+output_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\Resultado\ventas_procesadas.xlsx'
+
+# Leer el archivo TXT
+with open(file_path, 'r', encoding='utf-8') as file:
+    lines = file.readlines()
+
+data = []  # Lista para almacenar los datos procesados
+current_store = ""  # Variable para rastrear la tienda actual
+headers = []
+
+# Expresión regular para detectar filas de datos (Días o "T. Acum")
+row_pattern = re.compile(r'^(\d{2}|T\. Acum)\s')
+
+for line in lines:
+    line = line.strip()
+    
+    # Si la línea está vacía, saltarla
+    if not line:
+        continue
+    
+    # Si detecta un nombre de tienda (no es un número, ni "T. Acum", ni encabezado)
+    if not row_pattern.match(line) and not line.startswith("DIA"):
+        current_store = line.strip()
+        continue
+    
+    # Si detecta encabezados
+    if line.startswith("DIA"):
+        headers = line.split("\t")
+        headers.append("Tienda")  # Agregar columna de Tienda
+        continue
+    
+    # Si es un dato, procesarlo
+    if row_pattern.match(line):
+        row_data = line.split("\t")
+        if len(row_data) < len(headers) - 1:  # Si faltan columnas, completar
+            row_data.extend([""] * (len(headers) - 1 - len(row_data)))
+        row_data.append(current_store)  # Agregar la tienda también a "T. Acum"
+        data.append(row_data)
+
+# Crear DataFrame
+if data:
+    df = pd.DataFrame(data, columns=headers)
+    
+    # Asegurar que todas las filas de "T. Acum" tengan la tienda correcta
+    df.loc[df["DIA"] == "T. Acum", "Tienda"] = df["Tienda"].ffill()
+
+    # Convertir columnas numéricas a valores (sin comas)
+    numeric_columns = ["VENTA_24", "VENTA_25", "PROFIT_24", "PROFIT_25", "ENT_SAL_24", "ENT_SAL_25", "Q_BOLETAS", "CAPAC_TIENDA", "ON-HAND"]
+    df[numeric_columns] = df[numeric_columns].replace({',': ''}, regex=True).apply(pd.to_numeric, errors='coerce')
+    
+    # Convertir columnas de porcentaje a formato con coma
+    percentage_columns = ["VAR%", "MG_24", "MG_25", "CONVERSION", "UNID_X_BOL"]
+    for col in percentage_columns:
+        df[col] = df[col].astype(str) + '%'
+    
+    # Guardar en Excel
+    df.to_excel(output_path, index=False, engine='xlsxwriter')
+    print(f"✅ Archivo guardado correctamente en {output_path}")
+else:
+    print("⚠️ No se encontraron datos para procesar.")
