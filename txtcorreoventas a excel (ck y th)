@@ -2,8 +2,8 @@ import pandas as pd
 import re
 
 # Rutas de archivos
-file_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\Origen\TEXT\CK\VentaCK2303.txt'
-output_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\Resultado\CK\ventas_procesadas2303s.xlsx'
+file_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\Origen\TEXT\TH\ventath2303.txt'
+output_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\Resultado\TH\ventas_TH2303.xlsx'
 
 # Leer archivo
 with open(file_path, 'r', encoding='utf-8') as file:
@@ -81,6 +81,9 @@ columnas_porcentuales = [
     "VAR%_VENTA", "VAR%_UNID", "VAR%_PROFIT",
     "MG_24", "MG_25", "CONVERSION", "UNID_X_BOL"
 ]
+# Ajustar MG_24 para multiplicar por 10 y mostrar como porcentaje correcto
+if "MG_24" in df.columns:
+    df["MG_24"] = df["MG_24"].apply(lambda x: round(x * 10, 2) if pd.notnull(x) else None)
 
 for col in columnas_porcentuales:
     if col in df.columns:
