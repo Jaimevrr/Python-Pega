@@ -1,98 +1,68 @@
 import pandas as pd
 import re
 
-# Rutas de archivos
-file_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\Origen\TEXT\TH\ventath2303.txt'
-output_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\Resultado\TH\ventas_TH2303.xlsx'
+# ------------------------------------------------------------------------------
+# 1. Definir rutas de archivos
+# ------------------------------------------------------------------------------
+file_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\Origen\TEXT\TH\ventath3103.txt'
+output_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\Resultado\TH\ventas_THMARZOys.xlsx'
 
-# Leer archivo
+# Leer el archivo TXT
 with open(file_path, 'r', encoding='utf-8') as file:
     lines = file.readlines()
 
-data = []
-current_store = None
+data = []  # Lista para almacenar los datos procesados
+current_store = ""  # Variable para rastrear la tienda actual
 headers = []
+
+# Expresión regular para detectar filas de datos (Días o "T. Acum")
 row_pattern = re.compile(r'^(\d{2}|T\. Acum)\s')
 
-def limpiar_numero(valor):
-    try:
-        if isinstance(valor, str):
-            valor = valor.strip()
-            valor = valor.replace("−", "-").replace(" ", "")
-            if valor.count(",") >= 2 and "." not in valor:
-                valor = valor.replace(",", "")
-            else:
-                valor = valor.replace(".", "").replace(",", ".")
-        if valor == "":
-            return None
-        return float(valor)
-    except:
-        return None
-
-# Procesar líneas
 for line in lines:
     line = line.strip()
+    
+    # Si la línea está vacía, saltarla
     if not line:
         continue
+    
+    # Si detecta un nombre de tienda (no es un número, ni "T. Acum", ni encabezado)
     if not row_pattern.match(line) and not line.startswith("DIA"):
-        current_store = line
+        current_store = line.strip()
         continue
+    
+    # Si detecta encabezados
     if line.startswith("DIA"):
-        raw_headers = line.split("\t")
-        headers = []
-        counter = {}
-        for h in raw_headers:
-            if h in counter:
-                counter[h] += 1
-                h_new = f"{h}_{counter[h]}"
-            else:
-                counter[h] = 1
-                h_new = h
-            headers.append(h_new)
-        headers.append("Tienda")
+        headers = line.split("\t")
+        headers.append("Tienda")  # Agregar columna de Tienda
         continue
+    
+    # Si es un dato, procesarlo
     if row_pattern.match(line):
         row_data = line.split("\t")
-        if len(row_data) < len(headers) - 1:
+        if len(row_data) < len(headers) - 1:  # Si faltan columnas, completar
             row_data.extend([""] * (len(headers) - 1 - len(row_data)))
-        row_data.append(current_store)
+        row_data.append(current_store)  # Agregar la tienda también a "T. Acum"
         data.append(row_data)
 
 # Crear DataFrame
-df = pd.DataFrame(data, columns=headers)
-df["Tienda"] = df["Tienda"].ffill()
+if data:
+    df = pd.DataFrame(data, columns=headers)
+    
+    # Asegurar que todas las filas de "T. Acum" tengan la tienda correcta
+    df.loc[df["DIA"] == "T. Acum", "Tienda"] = df["Tienda"].ffill()
 
-# Renombrar columnas duplicadas
-df = df.rename(columns={
-    "VAR%": "VAR%_VENTA",
-    "VAR%_2": "VAR%_UNID",
-    "VAR%_3": "VAR%_PROFIT"
-})
+    # Convertir columnas numéricas a valores (sin comas)
+    numeric_columns = ["VENTA_24", "VENTA_25", "PROFIT_24", "PROFIT_25", "ENT_SAL_24", "ENT_SAL_25", "Q_BOLETAS", "CAPAC_TIENDA", "ON-HAND"]
+    df[numeric_columns] = df[numeric_columns].replace({',': ''}, regex=True).apply(pd.to_numeric, errors='coerce')
+    
+    # Convertir columnas de porcentaje a formato con coma
+    percentage_columns = ["VAR%", "MG_24", "MG_25", "CONVERSION", "UNID_X_BOL"]
+    for col in percentage_columns:
+        df[col] = df[col].astype(str) + '%'
+    
+    # Guardar en Excel
+    df.to_excel(output_path, index=False, engine='xlsxwriter')
+    print(f"✅ Archivo guardado correctamente en {output_path}")
+else:
+    print("⚠️ No se encontraron datos para procesar.")
 
-# Limpieza general
-columnas_texto = ["DIA", "Tienda"]
-columnas_numericas = [col for col in df.columns if col not in columnas_texto]
-
-for col in columnas_numericas:
-    df[col] = df[col].apply(limpiar_numero)
-
-# Procesar porcentajes como decimales reales (ej: 62 → 0.62)
-columnas_porcentuales = [
-    "VAR%_VENTA", "VAR%_UNID", "VAR%_PROFIT",
-    "MG_24", "MG_25", "CONVERSION", "UNID_X_BOL"
-]
-# Ajustar MG_24 para multiplicar por 10 y mostrar como porcentaje correcto
-if "MG_24" in df.columns:
-    df["MG_24"] = df["MG_24"].apply(lambda x: round(x * 10, 2) if pd.notnull(x) else None)
-
-for col in columnas_porcentuales:
-    if col in df.columns:
-        df[col] = df[col].apply(lambda x: round(x / 100, 4) if pd.notnull(x) and abs(x) > 1 else round(x, 4))
-
-# Procesar UNID_X_BOL bien
-if "UNID_X_BOL" in df.columns:
-    df["UNID_X_BOL"] = df["UNID_X_BOL"].apply(limpiar_numero).round(2)
-
-# Exportar limpio a Excel
-df.to_excel(output_path, index=False, engine='xlsxwriter')
-print(f"✅ Archivo guardado correctamente en:\n{output_path}")
