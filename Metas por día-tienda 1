@@ -1,67 +1,71 @@
-#Formato de metas, con posibilidad de dejar en cero los días de cierre de tienda y sumando la proporcion al resto del mes. (siguiente paso, subir las proporciones desde un excel o ver si es más comodo así
 import pandas as pd
+import calendar
 
-# Ruta al archivo con la meta mensual
-file_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\meta.xlsx'
+# === CONFIGURACIÓN GENERAL ===
+anio = 2025
+mes = 4  # Abril
+dias_en_mes = calendar.monthrange(anio, mes)[1]
 
-# Leer el archivo Excel
-df = pd.read_excel(file_path)
+# Ruta al archivo Excel de entrada y salida
+file_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\Metas\metadiaADF_Abril.xlsx'
+output_file_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\Metas\Resultado\MetaAbril.xlsx'
 
-# Proporciones diarias originales
+# === PROPORCIONES ORIGINALES (ajustadas a cantidad real de días) ===
 proporciones_originales = [
-    0.02, 0.03, 0.05, 0.04, 0.02, 0.02, 0.03, 0.03, 0.03, 0.05, 0.04, 0.03, 0.03, 0.02, 0.04, 0.03, 0.04, 0.04,
-    0.02, 0.02, 0.02, 0.03, 0.03, 0.04, 0.04, 0.02, 0.02, 0.03, 0.03, 0.04, 0.05
-]
+    0.03, 0.03, 0.03, 0.03, 0.06, 0.05, 0.02, 0.02, 0.02, 0.03,
+    0.03, 0.05, 0.05, 0.03, 0.02, 0.02, 0.03, 0.03, 0.05, 0.04,
+    0.02, 0.02, 0.02, 0.03, 0.04, 0.05, 0.05, 0.03, 0.02, 0.02, 0.00
+][:dias_en_mes]  # Corta la lista al número real de días
 
-# Definir las tiendas y los días en los que no abrirán en caso de necesitar
+# === TIENDAS CERRADAS ===
 tiendas_cerradas = {
-    'COSTANERA CENTER': [0, 0],  # COSTANERA CENTER no abrirá los días 14 y 21
-    # Agrega más tiendas y sus días correspondientes si es necesario
+    'COSTANERA CENTER': [14, 21]  # Días reales de cierre
+    # Puedes agregar más tiendas: 'TIENDA X': [5, 10, 15]
 }
 
-# Crear una lista para almacenar los datos de salida
+# === CARGA DE DATOS ===
+df = pd.read_excel(file_path)
 data = []
 
-# Iterar sobre cada fila en el DataFrame original
+# === PROCESAMIENTO DE METAS ===
 for _, row in df.iterrows():
     meta_mensual = row['Meta Mensual']
     tienda = row['Tienda']
     
-    # Copiar las proporciones originales para esta tienda
     proporciones = proporciones_originales.copy()
     
-    # Ajustar las proporciones si la tienda está en la lista de tiendas cerradas
     if tienda in tiendas_cerradas:
         dias_cerrados = tiendas_cerradas[tienda]
-        # Establecer las proporciones en esos días a cero
         for dia in dias_cerrados:
-            proporciones[dia - 1] = 0
-        # Redistribuir las proporciones restantes para que sumen 1
+            if 1 <= dia <= dias_en_mes:
+                proporciones[dia - 1] = 0  # Día a índice
+
         proporciones_restantes = [p for p in proporciones if p > 0]
         total_proporciones_restantes = sum(proporciones_restantes)
         proporciones = [p / total_proporciones_restantes if p > 0 else 0 for p in proporciones]
+
+    # Cálculo de metas diarias
+    metas_diarias = [meta_mensual * p for p in proporciones]
     
-    # Calcular las metas diarias para cada día del mes
-    metas_diarias = []
-    for proporcion in proporciones:
-        meta_diaria = meta_mensual * proporcion
-        metas_diarias.append(meta_diaria)
-    
-    # Ajustar la última meta diaria para asegurar que la suma total coincida con la meta mensual
+    # Ajuste final para que la suma sea exacta
     diferencia = meta_mensual - sum(metas_diarias)
-    metas_diarias[-1] += diferencia  # Ajustar la última meta diaria para corregir la diferencia
-    
-    # Crear las filas del DataFrame de resultados
-    for i, meta_diaria in enumerate(metas_diarias):
-        fecha = int(pd.Timestamp(2024, 8, i + 1).strftime('%Y%m%d'))  # Fecha como número
-        data.append([row['Company'], fecha, row['Almacen'], row['Centro de Costos'], meta_diaria])
+    metas_diarias[-1] += diferencia
 
-# Crear un DataFrame con los resultados
+    # Construcción de resultados
+    for i in range(dias_en_mes):
+        fecha = pd.Timestamp(anio, mes, i + 1)  # Formato datetime para Excel
+        data.append([
+            row['Company'],
+            fecha,
+            row['Almacen'],
+            row['Centro de Costos'],
+            metas_diarias[i]
+        ])
+
+# === CREACIÓN Y GUARDADO DE RESULTADO ===
 df_resultado = pd.DataFrame(data, columns=['Company', 'Fecha', 'Almacen', 'Centro de Costo', 'Meta diaria'])
-
-# Guardar el resultado en un nuevo archivo Excel
-output_file_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\meta_diariaborrame.xlsx'
 df_resultado.to_excel(output_file_path, index=False)
 
-print(f"Archivo guardado en {output_file_path}")
+print(f"✅ Archivo guardado correctamente en: {output_file_path}")
+
 
