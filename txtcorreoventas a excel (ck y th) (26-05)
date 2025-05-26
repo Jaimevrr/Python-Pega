@@ -1,0 +1,92 @@
+import pandas as pd
+import re
+
+# -----------------------------------------
+# 1. Definir rutas de archivos
+# -----------------------------------------
+file_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\Origen\TEXT\CK\txttest.txt'
+output_path = r'C:\Users\Jaime Valderrama\OneDrive - American Sportswear, S.A\Documentos\Jaime\Testing\Nueva carpeta\Resultado\TH\test3.xlsx'
+
+data = []
+current_centro = ''
+current_almacen = ''
+headers = []
+
+with open(file_path, 'r', encoding='utf-8') as f:
+    lines = f.readlines()
+
+i = 0
+while i < len(lines):
+    line = lines[i].strip()
+    
+    # Detectar inicio de bloque de tienda
+    if line.startswith("Centro de Costo:"):
+        # Extraer centro de costo y almacén
+        m = re.match(r'Centro de Costo:\s*(.*?)\s*-\s*Almacén:\s*(.*)', line)
+        if m:
+            current_centro = m.group(1).strip()
+            current_almacen = m.group(2).strip()
+        # Buscar encabezado en las siguientes líneas
+        j = i + 1
+        while j < len(lines):
+            header_line = lines[j].strip()
+            if header_line.startswith("Día"):
+                headers = header_line.split("\t")
+                headers.extend(["Centro de Costo", "Almacén", "Tipo de Fila"])  # Agregar columnas extra
+                break
+            j += 1
+        # Leer datos hasta encontrar "Total"
+        k = j + 1
+        while k < len(lines):
+            data_line = lines[k].strip()
+            if data_line == "Total":
+                # Procesar línea siguiente a "Total" (que tiene los totales, pero está corrida)
+                if k+1 < len(lines):
+                    total_line = lines[k+1].strip()
+                    if total_line:  # No está vacía
+                        total_row = total_line.split("\t")
+                        # --- AJUSTE PROVISORIO por columnas corridas en TXT:
+                        # En el TXT actual, el primer valor de total está bajo "Día", el siguiente bajo "Venta 24", etc.
+                        # Entonces agregamos un string "Total" al inicio de la lista, así todo calza.
+                        total_row = ["Total"] + total_row
+                        # Completar si faltan columnas
+                        if len(total_row) < len(headers) - 3:
+                            total_row.extend([""] * (len(headers) - 3 - len(total_row)))
+                        total_row.extend([current_centro, current_almacen, "Total"])
+                        data.append(total_row)
+                break  # Termina el bloque
+            if data_line and not data_line.startswith("Día"):
+                row = data_line.split("\t")
+                # Completar si faltan columnas
+                if len(row) < len(headers) - 3:
+                    row.extend([""] * (len(headers) - 3 - len(row)))
+                row.extend([current_centro, current_almacen, "Día"])
+                data.append(row)
+            k += 1
+        i = k  # Salta al final del bloque
+    i += 1
+
+# Crear DataFrame
+if data:
+    df = pd.DataFrame(data, columns=headers)
+
+    # Convertir columnas numéricas donde aplica (si existen en los datos)
+    numeric_columns = [
+        "Venta 24", "Venta 25", "Unid 24", "Unid 25", "Profit 24", "Profit 25",
+        "Ent 24", "Ent 25", "Q Tickets", "Cap. Tienda", "On Hand"
+    ]
+    for col in numeric_columns:
+        if col in df.columns:
+            df[col] = df[col].replace({',': ''}, regex=True).apply(pd.to_numeric, errors='coerce')
+
+    # Guardar en Excel
+    df.to_excel(output_path, index=False, engine='xlsxwriter')
+    print(f"✅ Archivo guardado correctamente en {output_path}")
+
+    # Comentario para cuando arreglen el sistema:
+    # ----
+    # # Si la fila total ya viene bien alineada (primera columna="Total"), 
+    # # simplemente eliminas el "+ ['Total']" en la sección donde se agrega la fila de total.
+    # ----
+else:
+    print("⚠️ No se encontraron datos para procesar.")
