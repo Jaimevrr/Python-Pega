@@ -1,0 +1,93 @@
+Sub ExtraerTodasLasTablasDeCorreos()
+
+    Dim OutlookApp As Object, OutlookNamespace As Object, FolderItems As Object
+    Dim Mail As Object, ExcelApp As Object, Workbook As Object, Worksheet As Object
+    Dim iRow As Long, StartDate As Date, EndDate As Date, fechaInput As String
+    Dim HtmlBody As String, HTMLDoc As Object
+    Dim tableElement As Object, rowElement As Object, cellElement As Object
+    Dim pos As Long, TableStart As Long, TableEnd As Long, TableHtml As String
+
+    ' --- Fechas ---
+    Do
+        fechaInput = InputBox("Fecha inicio (dd/mm/yyyy):")
+        If IsDate(fechaInput) Then
+            StartDate = DateValue(fechaInput)
+            Exit Do
+        Else
+            MsgBox "Fecha inválida."
+        End If
+    Loop
+
+    Do
+        fechaInput = InputBox("Fecha fin (dd/mm/yyyy):")
+        If IsDate(fechaInput) Then
+            EndDate = DateValue(fechaInput)
+            Exit Do
+        Else
+            MsgBox "Fecha inválida."
+        End If
+    Loop
+
+    ' --- Inicializar Outlook ---
+    Set OutlookApp = GetObject(, "Outlook.Application")
+    Set OutlookNamespace = OutlookApp.GetNamespace("MAPI")
+    Set FolderItems = OutlookNamespace.GetDefaultFolder(6).Items
+    FolderItems.Sort "[ReceivedTime]", True
+
+    ' --- Inicializar Excel ---
+    Set ExcelApp = CreateObject("Excel.Application")
+    ExcelApp.Visible = True
+    Set Workbook = ExcelApp.Workbooks.Add
+    Set Worksheet = Workbook.Sheets(1)
+    iRow = 1
+
+    ' --- Loop por correos ---
+    For Each Mail In FolderItems
+        If Mail.Class = 43 Then
+            If InStr(1, Mail.Subject, "Confirmación de recepción", vbTextCompare) > 0 _
+            And InStr(1, Mail.SenderName, "bechir katt", vbTextCompare) > 0 _
+            And Mail.ReceivedTime >= StartDate And Mail.ReceivedTime <= EndDate Then
+
+                HtmlBody = Mail.HtmlBody
+                pos = 1 ' posición inicial de búsqueda
+
+                Do
+                    TableStart = InStr(pos, HtmlBody, "<table", vbTextCompare)
+                    If TableStart = 0 Then Exit Do
+
+                    TableEnd = InStr(TableStart, HtmlBody, "</table>", vbTextCompare)
+                    If TableEnd = 0 Then Exit Do
+
+                    TableHtml = Mid(HtmlBody, TableStart, TableEnd - TableStart + 8)
+
+                    ' --- Parsear HTML ---
+                    Set HTMLDoc = CreateObject("HTMLFile")
+                    HTMLDoc.Open
+                    HTMLDoc.Write "<html><body>" & TableHtml & "</body></html>"
+                    HTMLDoc.Close
+
+                    Set tableElement = HTMLDoc.getElementsByTagName("table")(0)
+
+                    If Not tableElement Is Nothing Then
+                        For Each rowElement In tableElement.Rows
+                            Dim j As Long: j = 2
+                            Worksheet.Cells(iRow, 1).Value = Format(Mail.ReceivedTime, "yyyy-mm-dd")
+
+                            For Each cellElement In rowElement.Cells
+                                Worksheet.Cells(iRow, j).Value = cellElement.innerText
+                                j = j + 1
+                            Next cellElement
+
+                            iRow = iRow + 1
+                        Next rowElement
+                    End If
+
+                    pos = TableEnd + 8 ' avanzar para buscar la siguiente tabla
+
+                Loop
+
+            End If
+        End If
+    Next Mail
+
+    MsgBox "Listo. Se extrajeron todas las tablas de todos los correos."
