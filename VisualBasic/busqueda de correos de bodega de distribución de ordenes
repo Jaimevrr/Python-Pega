@@ -46,7 +46,7 @@ Sub ExtraerTodasLasTablasDeCorreos()
         If Mail.Class = 43 Then
             If InStr(1, Mail.Subject, "Confirmación de recepción", vbTextCompare) > 0 _
             And InStr(1, Mail.SenderName, "bechir katt", vbTextCompare) > 0 _
-            And Mail.ReceivedTime >= StartDate And Mail.ReceivedTime <= EndDate Then
+            And Mail.ReceivedTime >= StartDate And Mail.ReceivedTime < EndDate + 1 Then
 
                 HtmlBody = Mail.HtmlBody
                 pos = 1 ' posición inicial de búsqueda
@@ -90,4 +90,8 @@ Sub ExtraerTodasLasTablasDeCorreos()
         End If
     Next Mail
 
-    MsgBox "Listo. Se extrajeron todas las tablas de todos los correos."
+    MsgBox "Listo. Se extrajeron todos los correos de Bechir."
+
+End Sub
+
+
